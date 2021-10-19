@@ -36,8 +36,8 @@
 #define CN_BLACK_1 14
 #define CN_BLACK_2 15
 #define CN_BLACK_3 16
-#define CN_BLACK_4 17
-#define CN_BLACK_5 18
+#define CN_BLACK_4 18
+#define CN_BLACK_5 17
 #define CN_BLACK_6 19
 #define CN_BLACK_7 20
 #define CN_BLACK_8 21

@@ -4,7 +4,7 @@
 #include <Wire.h>
 
 TRS80KeyboardEvent::TRS80KeyboardEvent() {
-  clear();
+  clear();  
 }
 
 void TRS80KeyboardEvent::clear() {
@@ -14,6 +14,18 @@ void TRS80KeyboardEvent::clear() {
   trsModifiers = 0;
   keyDown = false;
   keyUp = false;
+}
+
+TRS80KeyboardEvent& TRS80KeyboardEvent::operator=(const TRS80KeyboardEvent& source) {  
+  if(this != &source) {
+    trsKey = source.trsKey;
+    key = source.key;
+    modifiers = source.modifiers;
+    trsModifiers = source.trsModifiers;
+    keyDown = source.keyDown;
+    keyUp = source.keyUp;
+  }
+  return *this;
 }
 
 int TRS80Keyboard::readModifiers() {
@@ -55,6 +67,8 @@ TRS80Keyboard::TRS80Keyboard() {
   previousModifiers = 0;
   capslockOn = false;
   numlockOn = false;
+  backlogSize = 0;
+  queuePtr = 0;
 }
 
 void TRS80Keyboard::begin() {
@@ -82,12 +96,30 @@ bool TRS80Keyboard::modifierOn( int modifier, int trsModifiers) {
 }
 
 void TRS80Keyboard::getKeyEvent(TRS80KeyboardEvent *event) {
-  event->clear();  
+  if(backlogSize > 0) {
+    event = &eventQueue[queuePtr];
+    queuePtr++;
+    backlogSize--;
+  } else {
+    internalGetKeyEvent(event);    
+    if(event->key == KEY_BRACES) {
+      if(event->keyDown) {
+        Serial.println("handling doubleclick");
+        this->handleDoubleclick(KEY_BRACES, KEY_RIGHT_BRACE, event);
+        Serial.println("done handling doubleclick");
+      }
+    }
+  }
+}
+
+void TRS80Keyboard::internalGetKeyEvent(TRS80KeyboardEvent *event) {
+  event->clear();
   int trsModifiers = readModifiers();
   delay(30);
   int trsKey = readKey();
 
   int modifiers = 0;
+  
   modifiers += modifierOn(TRS_SHIFT, trsModifiers) ? MODIFIERKEY_SHIFT : 0;
   modifiers += modifierOn(TRS_GRPH, trsModifiers) ? MODIFIERKEY_GRPH : 0;
   modifiers += modifierOn(TRS_CODE, trsModifiers) ? MODIFIERKEY_CODE : 0;
@@ -107,7 +139,7 @@ void TRS80Keyboard::getKeyEvent(TRS80KeyboardEvent *event) {
     numPress == 1 ||
     trsModifiers < previousModifiers;
 
-  int key = capsPress != 0 ? KEY_CAPS_LOCK : numPress != 0 ? KEY_NUM_LOCK : trsKey != -1 ? keymap[trsKey]: 0;
+  int key = capsPress != 0 ? KEY_CAPS_LOCK : numPress != 0 ? KEY_NUM_LOCK : trsKey != -1 ? keymap[trsKey]: previousKey != -1 ? keymap[previousKey] : 0;
 
   event->keyDown = keyDown;
   event->keyUp = keyUp;
@@ -118,6 +150,41 @@ void TRS80Keyboard::getKeyEvent(TRS80KeyboardEvent *event) {
   
   previousKey = trsKey;
   previousModifiers = trsModifiers;
+}
+
+void TRS80Keyboard::handleDoubleclick(int key, int transformKey, TRS80KeyboardEvent* event) {
+  if(event->keyDown && event->key == key) {
+    queuePtr = 0;
+    backlogSize = 0;
+    elapsedMillis doubleclickTimer = 0;
+    int originalModifiers = event->modifiers;
+    bool keyUp = false; 
+    TRS80KeyboardEvent dblclickEvent;
+    
+    while(
+      doubleclickTimer <= 200 && 
+      !(keyUp && dblclickEvent.keyDown)
+    ){    
+      this->internalGetKeyEvent(&dblclickEvent);
+      if(dblclickEvent.keyUp) {
+        Serial.println("dblclick keyup");
+        keyUp = true;
+        eventQueue[backlogSize] = dblclickEvent;
+        backlogSize++;        
+      }
+      Serial.println(doubleclickTimer <= DOUBLECLICK_TIMEOUT && 
+      !(keyUp && dblclickEvent.keyDown));
+    }
+    
+    if(dblclickEvent.keyDown && key == dblclickEvent.key && originalModifiers == dblclickEvent.modifiers) {
+      event->key = transformKey;
+      backlogSize = 0;
+    } else {
+      eventQueue[backlogSize] = dblclickEvent;
+      backlogSize++;
+      queuePtr++;
+    }
+  }
 }
 
 const int TRS80Keyboard::keymap[64] = {

@@ -29,9 +29,12 @@
 #define ROWCOUNT 8
 #define COLCOUNT 8
 
+#define DOUBLECLICK_TIMEOUT 100
+
 class TRS80KeyboardEvent {
   public:
     TRS80KeyboardEvent();
+    TRS80KeyboardEvent& operator=(const TRS80KeyboardEvent& rhs);
     void clear();    
     bool keyUp;
     bool keyDown;
@@ -46,6 +49,7 @@ class TRS80Keyboard {
     TRS80Keyboard();
     void begin();
     void getKeyEvent(TRS80KeyboardEvent* event);
+    void handleDoubleclick(int key, int transformKey, TRS80KeyboardEvent* event);
     bool numlockOn;
     bool capslockOn;
   private:
@@ -55,6 +59,10 @@ class TRS80Keyboard {
     int previousModifiers;
     int press(int modifierKey, int trsModifiers, int previousTrsModifiers);
     bool modifierOn(int modifierKey, int trsModifiers);
+    int backlogSize;
+    int queuePtr;
+    void internalGetKeyEvent(TRS80KeyboardEvent* event);
+    TRS80KeyboardEvent eventQueue[3];
     static const int keymap[64];
     static const int modifiers[8];
     static const int rows[8];
